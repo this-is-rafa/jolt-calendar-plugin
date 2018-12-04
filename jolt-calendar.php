@@ -43,13 +43,25 @@ function updateCalendarListings() {
   $client = getClient();
   $service = new Google_Service_Calendar($client);
   
-  // Print the next 10 events on the user's calendar.
+  //Set our start and end times
+  $timeMin = new DateTime('NOW');
+  $timeMin->setTimezone(new DateTimeZone('America/New_York'));
+  $timeMin->setTime(0,0);
+
+  $timeMax = new DateTime('NOW');
+  $timeMax->setTimezone(new DateTimeZone('America/New_York'));
+  $timeMax->setTime(0,0);
+  $timeMax->modify('+8 days');
+
+  //echo 'min: ' . $timeMin->format('c') . ' max: ' . $timeMax->format('c');
+
   $calendarId = get_option('jolt_gcalId', 'none');
   $optParams = array(
-    'maxResults' => 10,
+    'maxResults' => 250,
     'orderBy' => 'startTime',
     'singleEvents' => true,
-    'timeMin' => date('c'),
+    'timeMin' => $timeMin->format('c'),
+    'timeMax' => $timeMax->format('c'),
   );
   $results = $service->events->listEvents($calendarId, $optParams);
   $events = $results->getItems();
@@ -57,13 +69,53 @@ function updateCalendarListings() {
   if (empty($events)) {
       return '{0:"No upcoming events found."}';
   } else {
-      update_option('jolt_calendarEvents', $events);
+      $trimEvents = sortCalendar($events);
+      update_option('jolt_calendarEvents', $trimEvents);
   }
 }
 
 function getCalendarListings() {
   return get_option('jolt_calendarEvents', 'none');
 }
+
+function sortCalendar($cal) {
+  //$cal = json_decode($cal, true);
+
+  $newCal = [];
+  $i = 0;
+  foreach ($cal as $event) {
+    $timestamp = new DateTime($event['start']['dateTime']);
+    $eventHour = $timestamp->format('g:iA');
+
+    //Set the timestamp to midnight, to group events by date
+    $timestamp->setTime(0,0);
+    $timestamp = $timestamp->format('D M j');
+    
+    //Get only what we need to display in the frontend
+    $trimEvent = [
+      'title' => $event['summary'],
+      'startTime' => $eventHour
+    ];
+    
+    if ( !isset($newCal[$i] ) ) {
+      $newCal[] = [
+        'date' => $timestamp,
+        'events' =>  [$trimEvent]
+      ];
+    } else if ( $newCal[$i]['date'] == $timestamp ) {
+      $newCal[$i]['events'][] = $trimEvent;
+    } else {
+      $newCal[] = [
+        'date' => $timestamp,
+        'events' =>  [$trimEvent]
+      ];
+      $i++;
+    }
+  }
+
+  return $newCal;
+}
+
 
 // Set up the admin settings page.
 add_action( 'admin_menu', 'addSettingsPage' );
