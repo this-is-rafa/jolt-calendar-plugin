@@ -39,7 +39,11 @@ function getClient()
 }
 
 
-function updateCalendarListings() {
+function updateCalendarListings($numDays = null) {
+  if (null === $numDays) {
+    $numDays = 3;
+  }
+
   $client = getClient();
   $service = new Google_Service_Calendar($client);
   
@@ -69,7 +73,7 @@ function updateCalendarListings() {
   if (empty($events)) {
       return '{0:"No upcoming events found."}';
   } else {
-      $trimEvents = sortCalendar($events);
+      $trimEvents = sortCalendar($events, $numDays);
       update_option('jolt_calendarEvents', $trimEvents);
   }
 }
@@ -78,12 +82,17 @@ function getCalendarListings() {
   return get_option('jolt_calendarEvents', 'none');
 }
 
-function sortCalendar($cal) {
-  //$cal = json_decode($cal, true);
+function sortCalendar($cal, $numDays) {
+  if (null === $numDays) {
+    $numDays = 3;
+  }
+
+  $numDays = $numDays - 2;
 
   $newCal = [];
   $i = 0;
   foreach ($cal as $event) {
+    if ($i > $numDays) break;
     $timestamp = new DateTime($event['start']['dateTime']);
     $eventHour = $timestamp->format('g:iA');
 
@@ -137,6 +146,10 @@ function createAdminPage() {
     wp_die('Unauthorized user');
   }
 
+  $gapiKey = get_option('jolt_gapiKey', 'none');
+  $gcalId = get_option('jolt_gcalId', 'none');
+  $calDays = get_option('jolt_calDays', 'none');
+
   if ( ! isset( $_POST['jolt_calendar_settings_noncer'] ) 
     || ! wp_verify_nonce( $_POST['jolt_calendar_settings_noncer'], 'jolt_calendar' ) 
   ) {
@@ -144,7 +157,7 @@ function createAdminPage() {
   } else {
 
     if (isset($_POST['jolt_refresh'])) {
-      updateCalendarListings();
+      updateCalendarListings($calDays);
       print "refreshed";
     }
 
@@ -161,10 +174,16 @@ function createAdminPage() {
       $gcalId = strip_tags($gcalId);
       update_option('jolt_gcalId', $gcalId);
     }
-  }
 
-  $gapiKey = get_option('jolt_gapiKey', 'none');
-  $gcalId = get_option('jolt_gcalId', 'none');
+    if (isset($_POST['jolt_calDays'])) {
+      $calDays = $_POST['jolt_calDays'];
+      $calDays = trim($calDays);
+      $calDays = strip_tags($calDays);
+      if ( preg_match('/^\d+$/', $calDays) ) {
+        update_option('jolt_calDays', $calDays);
+      }
+    }
+  }
 
   ?>
   <div>
@@ -181,6 +200,12 @@ function createAdminPage() {
         <label>
           Google Calendar ID (Must be public)
           <input name="jolt_gcalId" type="text" value="<?= $gcalId ?>" />
+        </label>
+      </p>
+      <p>
+        <label>
+          Number of days ahead to show in schedule. 
+          <input name="jolt_calDays" type="text" value="<?= $calDays ?>" />
         </label>
       </p>
       <?php wp_nonce_field( 'jolt_calendar', 'jolt_calendar_settings_noncer' ); ?>
