@@ -99,11 +99,20 @@ function sortCalendar($cal, $numDays) {
     //Set the timestamp to midnight, to group events by date
     $timestamp->setTime(0,0);
     $timestamp = $timestamp->format('D M j');
+
+    //Make sure our description is a number
+    $description = $event['description'];
+    $showID = "0";
+
+    if ( is_numeric($description) ) {
+      $showID = $description;
+    }
     
     //Get only what we need to display in the frontend
     $trimEvent = [
       'title' => $event['summary'],
-      'startTime' => $eventHour
+      'startTime' => $eventHour,
+      'showID' => $showID
     ];
     
     if ( !isset($newCal[$i] ) ) {
@@ -128,8 +137,6 @@ function sortCalendar($cal, $numDays) {
 
 // Set up the admin settings page.
 add_action( 'admin_menu', 'addSettingsPage' );
-//add_action( 'admin_init', 'add_settings' );
-//add_action( 'admin_enqueue_scripts', 'admin_enqueue_scripts' );
 
 function addSettingsPage() {
   add_options_page(
