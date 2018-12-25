@@ -74,12 +74,18 @@ function updateCalendarListings($numDays = null) {
       return '{0:"No upcoming events found."}';
   } else {
       $trimEvents = sortCalendar($events, $numDays);
+      $upcomingShows = getScheduleShows($events);
       update_option('jolt_calendarEvents', $trimEvents);
+      update_option('jolt_upcomingShows', $upcomingShows);
   }
 }
 
 function getCalendarListings() {
   return get_option('jolt_calendarEvents', 'none');
+}
+
+function getUpcomingShows() {
+  return get_option('jolt_upcomingShows', 'none');
 }
 
 function sortCalendar($cal, $numDays) {
@@ -134,6 +140,91 @@ function sortCalendar($cal, $numDays) {
   return $newCal;
 }
 
+function getScheduleShows($events) {
+  $showsArr = [];
+  
+  foreach ($events as $event) {
+    $description = $event['description'];
+    $showID = "0";
+
+    if ( is_numeric($description) ) {
+      $showID = $description;
+    }
+
+    $showsArr[] = $showID;
+  }
+
+  $args = array(
+    'post_type' => 'cpt_artist',
+    'posts_per_page' => -1,
+    'post_status' => 'published',
+    'meta_query' => array(
+        array(
+            'key' => 'calendar_id',
+            'value' => $showsArr,
+            'compare' => 'IN'
+        )
+    )
+  );
+
+  $query = new WP_Query($args);
+
+  if ( $query->have_posts() ) {
+    $shows = [];
+
+    while ( $query->have_posts() ) {
+      $query->the_post();
+
+      //Build our array to macth Wordpress's default REST response
+      $shows[] = array(
+        'title' => array('rendered' => get_the_title() ),
+        'acf' => array(
+          'schedule_text' => get_field('schedule_text'),
+          'calendar_id' => get_field('calendar_id')
+        ),
+        'link' => get_the_permalink(),
+        '_embedded' => array(
+          'wp:featuredmedia' => array(
+            array(
+              'media_details' => array(
+                'sizes' => array(
+                  'card' => array(
+                    'source_url' => get_the_post_thumbnail_url( get_the_ID(), 'card')
+                  )
+                )
+              )
+            )
+          )
+        )
+      );
+
+    }
+  }
+
+  foreach ($events as $event) {
+    $showID = $event['description'];
+
+    if ( is_numeric($showID) ) {
+
+      foreach ($shows as &$show) {
+        if ( $show['acf']['calendar_id'] === $showID ) {
+          if ( empty($show['start_time']) ) {
+            $show['start_time'] = strtotime($event['start']['dateTime']);
+          }
+        }
+      }
+
+    }
+  }
+
+  usort($shows, "sortByTime");
+
+  return $shows;
+}
+
+function sortByTime( $a, $b ) {
+  return $a['start_time'] - $b['start_time'];
+}
 
 // Set up the admin settings page.
 add_action( 'admin_menu', 'addSettingsPage' );
@@ -233,5 +324,12 @@ add_action( 'rest_api_init', function () {
 	register_rest_route( 'wp/v2', '/jolt-cal', array(
 		'methods' => 'GET',
 		'callback' => 'getCalendarListings',
+	) );
+} );
+
+add_action( 'rest_api_init', function () {
+	register_rest_route( 'wp/v2', '/jolt-upcoming', array(
+		'methods' => 'GET',
+		'callback' => 'getUpcomingShows',
 	) );
 } );
