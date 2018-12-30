@@ -98,7 +98,6 @@ function sortCalendar($cal, $numDays) {
   $newCal = [];
   $i = 0;
   foreach ($cal as $event) {
-    if ($i > $numDays) break;
     $timestamp = new DateTime($event['start']['dateTime']);
     $eventHour = $timestamp->format('g:iA');
 
@@ -129,6 +128,7 @@ function sortCalendar($cal, $numDays) {
     } else if ( $newCal[$i]['date'] == $timestamp ) {
       $newCal[$i]['events'][] = $trimEvent;
     } else {
+      if ($i > $numDays) break;
       $newCal[] = [
         'date' => $timestamp,
         'events' =>  [$trimEvent]
@@ -157,7 +157,7 @@ function getScheduleShows($events) {
   $args = array(
     'post_type' => 'cpt_artist',
     'posts_per_page' => -1,
-    'post_status' => 'published',
+    'post_status' => 'publish',
     'meta_query' => array(
         array(
             'key' => 'calendar_id',
@@ -182,7 +182,7 @@ function getScheduleShows($events) {
           'schedule_text' => get_field('schedule_text'),
           'calendar_id' => get_field('calendar_id')
         ),
-        'link' => get_the_permalink(),
+        'slug' => get_post_field( 'post_name', get_the_ID() ),
         '_embedded' => array(
           'wp:featuredmedia' => array(
             array(
@@ -333,3 +333,19 @@ add_action( 'rest_api_init', function () {
 		'callback' => 'getUpcomingShows',
 	) );
 } );
+
+register_activation_hook( __FILE__, 'jolt_activation' );
+register_deactivation_hook( __FILE__, 'jolt_deactivation' );
+
+add_action( 'jolt_update_hourly', 'updateCalendarListings', 10, 2 );
+
+ 
+function jolt_activation() {
+  if ( !wp_next_scheduled( 'jolt_update_hourly' ) ) {
+    wp_schedule_event( time(), 'hourly', 'jolt_update_hourly' );
+  }
+}
+
+function jolt_deactivation() {
+    wp_clear_scheduled_hook( 'jolt_update_hourly' );
+}
