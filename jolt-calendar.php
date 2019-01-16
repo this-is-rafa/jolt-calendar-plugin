@@ -73,6 +73,7 @@ function updateCalendarListings($numDays = null) {
   if (empty($events)) {
       return '{0:"No upcoming events found."}';
   } else {
+      $events = addShowSlugsToEvents($events);
       $trimEvents = sortCalendar($events, $numDays);
       $upcomingShows = getScheduleShows($events);
       update_option('jolt_calendarEvents', $trimEvents);
@@ -87,6 +88,63 @@ function getCalendarListings() {
 function getUpcomingShows() {
   return get_option('jolt_upcomingShows', 'none');
 }
+
+function addShowSlugsToEvents($events) {
+  $showsArr = [];
+
+  foreach ($events as $event) {
+    //Make sure our description is a number
+    $description = $event['description'];
+    $showID = "0";
+
+    if ( is_numeric($description) ) {
+      $showID = $description;
+    }
+
+    $showsArr[] = $showID;
+  }
+
+  $args = array(
+    'post_type' => 'cpt_artist',
+    'posts_per_page' => -1,
+    'post_status' => 'publish',
+    'meta_query' => array(
+        array(
+            'key' => 'calendar_id',
+            'value' => $showsArr,
+            'compare' => 'IN'
+        )
+    )
+  );
+
+  $query = new WP_Query($args);
+
+  if ( $query->have_posts() ) {
+    $showDetails = [];
+
+    while ( $query->have_posts() ) {
+      $query->the_post();
+
+      $showDetails[] = array(
+        'calendar_id' => get_field('calendar_id'),
+        'slug' => get_post_field( 'post_name', get_the_ID() ),
+        'post_id' => get_the_ID()
+      );
+    } //endwhile
+  }//endif
+
+  foreach ($showDetails as $show) {
+    foreach ($events as &$event) {
+      if ($event['description'] === $show['calendar_id']) {
+        $event['calendar_id'] = $show['calendar_id'];
+        $event['slug'] = $show['slug'];
+        $event['post_id'] = $show['post_id'];
+      }
+    }
+  }
+
+  return $events;
+} 
 
 function sortCalendar($cal, $numDays) {
   if (null === $numDays) {
@@ -117,8 +175,18 @@ function sortCalendar($cal, $numDays) {
     $trimEvent = [
       'title' => $event['summary'],
       'startTime' => $eventHour,
-      'showID' => $showID
+      'timeStamp' => strtotime($event['start']['dateTime']),
+      //'showID' => $showID
     ];
+
+    if ($event['calendar_id'] !== null ) {
+      $postDetails = [
+        'calendar_id' => $event['calendar_id'],
+        'slug' => $event['slug'],
+        'post_id' => $event['post_id']
+      ];
+      $trimEvent = array_merge($trimEvent, $postDetails);
+    }
     
     if ( !isset($newCal[$i] ) ) {
       $newCal[] = [
