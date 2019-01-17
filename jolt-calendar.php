@@ -128,7 +128,8 @@ function addShowSlugsToEvents($events) {
       $showDetails[] = array(
         'calendar_id' => get_field('calendar_id'),
         'slug' => get_post_field( 'post_name', get_the_ID() ),
-        'post_id' => get_the_ID()
+        'post_id' => get_the_ID(),
+        'banner_image' => get_field('banner_image')
       );
     } //endwhile
   }//endif
@@ -139,6 +140,10 @@ function addShowSlugsToEvents($events) {
         $event['calendar_id'] = $show['calendar_id'];
         $event['slug'] = $show['slug'];
         $event['post_id'] = $show['post_id'];
+
+        if ( isset($show['banner_image'])) {
+          $event['banner_image'] = $show['banner_image']['url'];
+        }
       }
     }
   }
@@ -187,6 +192,13 @@ function sortCalendar($cal, $numDays) {
       ];
       $trimEvent = array_merge($trimEvent, $postDetails);
     }
+
+    if ( $event['banner_image'] !== null ) {
+      $postDetails = ['banner_image' => $event['banner_image']];
+      $trimEvent = array_merge($trimEvent, $postDetails);
+    }
+
+
     
     if ( !isset($newCal[$i] ) ) {
       $newCal[] = [
